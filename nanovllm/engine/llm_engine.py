@@ -1,9 +1,11 @@
 import atexit
+import gc
 from dataclasses import fields
 from time import perf_counter
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer
 import torch.multiprocessing as mp
+import torch
 
 from nanovllm.config import Config
 from nanovllm.sampling_params import SamplingParams
@@ -18,6 +20,7 @@ class LLMEngine:
         config_fields = {field.name for field in fields(Config)}
         config_kwargs = {k: v for k, v in kwargs.items() if k in config_fields}
         config = Config(model, **config_kwargs)
+        self._closed = False
         self.ps = []
         self.events = []
         ctx = mp.get_context("spawn")
@@ -31,13 +34,29 @@ class LLMEngine:
         self.tokenizer = AutoTokenizer.from_pretrained(config.model, use_fast=True)
         config.eos = self.tokenizer.eos_token_id
         self.scheduler = Scheduler(config)
-        atexit.register(self.exit)
+        self._exit_callback = self.exit
+        atexit.register(self._exit_callback)
 
     def exit(self):
-        self.model_runner.call("exit")
-        del self.model_runner
-        for p in self.ps:
+        if self._closed:
+            return
+        self._closed = True
+        if getattr(self, "_exit_callback", None) is not None:
+            atexit.unregister(self._exit_callback)
+            self._exit_callback = None
+        model_runner = getattr(self, "model_runner", None)
+        if model_runner is not None:
+            model_runner.call("exit")
+            del self.model_runner
+        for p in getattr(self, "ps", []):
             p.join()
+        self.ps = []
+        self.events = []
+        self.scheduler = None
+        self.tokenizer = None
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     def add_request(self, prompt: str | list[int], sampling_params: SamplingParams):
         if isinstance(prompt, str):

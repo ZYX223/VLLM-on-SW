@@ -2,13 +2,11 @@
 <img width="300" src="assets/logo.png">
 </p>
 
-<p align="center">
-<a href="https://trendshift.io/repositories/15323" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15323" alt="GeeeekExplorer%2Fnano-vllm | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-</p>
+# VLLM-on-SW
 
-# Nano-vLLM
+VLLM-style inference research codebase with a switchable SW emulator backend.
 
-A lightweight vLLM implementation built from scratch.
+The Python package import remains `nanovllm` for compatibility.
 
 ## Key Features
 
@@ -19,7 +17,7 @@ A lightweight vLLM implementation built from scratch.
 ## Installation
 
 ```bash
-pip install git+https://github.com/GeeeekExplorer/nano-vllm.git
+pip install git+https://github.com/ZYX223/VLLM-on-SW.git
 ```
 
 ## Model Download
@@ -43,6 +41,11 @@ outputs = llm.generate(prompts, sampling_params)
 outputs[0]["text"]
 ```
 
+To run with the SW emulator attention backend prototype, pass `backend="sw_emulator"`:
+```python
+llm = LLM("/YOUR/MODEL/PATH", backend="sw_emulator", enforce_eager=True, tensor_parallel_size=1)
+```
+
 ## Benchmark
 
 See `bench.py` for benchmark.
@@ -58,9 +61,9 @@ See `bench.py` for benchmark.
 | Inference Engine | Output Tokens | Time (s) | Throughput (tokens/s) |
 |----------------|-------------|----------|-----------------------|
 | vLLM           | 133,966     | 98.37    | 1361.84               |
-| Nano-vLLM      | 133,966     | 93.41    | 1434.13               |
+| VLLM-on-SW     | 133,966     | 93.41    | 1434.13               |
 
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=GeeeekExplorer/nano-vllm&type=Date)](https://www.star-history.com/#GeeeekExplorer/nano-vllm&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=ZYX223/VLLM-on-SW&type=Date)](https://www.star-history.com/#ZYX223/VLLM-on-SW&Date)

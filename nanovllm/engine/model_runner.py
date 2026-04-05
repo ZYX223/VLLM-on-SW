@@ -1,4 +1,5 @@
 import pickle
+import gc
 import torch
 import torch.distributed as dist
 from multiprocessing.synchronize import Event
@@ -23,7 +24,7 @@ class ModelRunner:
         self.rank = rank
         self.event = event
 
-        dist.init_process_group("nccl", "tcp://localhost:2333", world_size=self.world_size, rank=rank)
+        dist.init_process_group("nccl", self.config.dist_init_method, world_size=self.world_size, rank=rank)
         torch.cuda.set_device(rank)
         default_dtype = torch.get_default_dtype()
         torch.set_default_dtype(hf_config.torch_dtype)
@@ -55,7 +56,15 @@ class ModelRunner:
                 self.shm.unlink()
         if not self.enforce_eager:
             del self.graphs, self.graph_pool
+        if hasattr(self, "kv_cache"):
+            del self.kv_cache
+        if hasattr(self, "sampler"):
+            del self.sampler
+        if hasattr(self, "model"):
+            del self.model
+        gc.collect()
         torch.cuda.synchronize()
+        torch.cuda.empty_cache()
         dist.destroy_process_group()
 
     def loop(self):
@@ -92,6 +101,11 @@ class ModelRunner:
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
         max_num_batched_tokens, max_model_len = self.config.max_num_batched_tokens, self.config.max_model_len
+        if self.config.backend == "sw_emulator":
+            # The emulator backend uses a dense reference attention path, so full-length
+            # warmup can consume disproportionate memory before real workloads start.
+            max_model_len = min(max_model_len, 512)
+            max_num_batched_tokens = min(max_num_batched_tokens, max_model_len)
         num_seqs = min(max_num_batched_tokens // max_model_len, self.config.max_num_seqs)
         seqs = [Sequence([0] * max_model_len) for _ in range(num_seqs)]
         self.run(seqs, True)
